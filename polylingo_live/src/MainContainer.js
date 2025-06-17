@@ -153,44 +153,32 @@ function TranslationDisplay({ translationResult, outputLanguage, translationInPr
  * OutputControls
  * - Buttons for Copy, Replay, Clear, and TTS (Text-to-Speech)
  * - Props: translationResult, onCopy, outputLanguage, etc.
+ * - copyFeedback, clearFeedback: show transient feedback on actions (optional)
  */
-// PUBLIC_INTERFACE
-function OutputControls({ translationResult, onCopy, onReplay, onClear, outputLanguage }) {
-  // --- TTS state and play function
+function OutputControls({ translationResult, onCopy, onReplay, onClear, outputLanguage, copyFeedback, clearFeedback }) {
   const [ttsActive, setTtsActive] = React.useState(false);
   const ttsUtteranceRef = React.useRef(null);
 
-  // Map language code to TTS voice
-  // This function will pick the first matching voice for the language code
   function getVoiceForLang(lang) {
     if (!window.speechSynthesis) return null;
-    // Try to pick a matching browser voice for the language code.
-    // 'en' => 'en', 'es' => 'es', etc.
     const voices = window.speechSynthesis.getVoices();
     if (!voices || voices.length === 0) return null;
-    // Sometimes languages like 'es' are 'es-ES' or 'en-US', so use startsWith
     let selected = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(lang.toLowerCase()));
-    // Fallback: try just first matching pair
     if (!selected) {
       selected = voices.find(v => v.lang && v.lang.toLowerCase().split('-')[0] === lang.toLowerCase());
     }
-    // If still nothing, use default
     return selected || voices[0];
   }
 
-  // PUBLIC_INTERFACE
   // Play translated text out loud via SpeechSynthesis
   const handleTTS = React.useCallback(() => {
     if (!translationResult || !window.speechSynthesis) return;
     setTtsActive(true);
 
-    // Cancel any existing speech
     window.speechSynthesis.cancel();
 
-    // Wait for voices to be loaded if needed
     const speak = () => {
       let utter = new window.SpeechSynthesisUtterance(translationResult);
-      // Assign the voice for correct language
       const voice = getVoiceForLang(outputLanguage);
       if (voice) utter.voice = voice;
       utter.lang = (voice && voice.lang) || outputLanguage;
@@ -199,8 +187,6 @@ function OutputControls({ translationResult, onCopy, onReplay, onClear, outputLa
       ttsUtteranceRef.current = utter;
       window.speechSynthesis.speak(utter);
     };
-
-    // Voices might not be loaded right away (asynchronously)
     if (window.speechSynthesis.getVoices().length === 0) {
       window.speechSynthesis.onvoiceschanged = speak;
     } else {
@@ -208,51 +194,70 @@ function OutputControls({ translationResult, onCopy, onReplay, onClear, outputLa
     }
   }, [translationResult, outputLanguage]);
 
-  // Provide the functionality to the Replay prop too, for MainContainer (for interface symmetry)
+  // Provide the functionality to the Replay prop too (used by MainContainer for history replay)
   React.useEffect(() => {
     if (onReplay) {
-      // Optionally, allow triggering TTS externally via onReplay
       onReplay.current = handleTTS;
     }
   }, [handleTTS, onReplay]);
 
-  // Prevent multiple overlapping playbacks
   React.useEffect(() => {
     return () => {
-      // On unmount, cancel any active speech
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
     };
   }, []);
 
-  // Button disables
   const ttsDisabled = !translationResult || ttsActive;
 
+  // Hints and accessibility feedback strings
+  const copyBtnTitle = copyFeedback
+    ? copyFeedback
+    : "Copy translation to clipboard";
+  const clearBtnTitle = clearFeedback
+    ? clearFeedback
+    : "Clear translation and input";
+  const ttsBtnTitle = ttsActive
+    ? "Playing translation (Text-to-speech)"
+    : "Replay translation output with speech";
+
   return (
-    <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+    <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
       <button
         className="btn"
-        style={{ marginRight: 8 }}
+        style={{ marginRight: 8, borderColor: copyFeedback ? "#50E3C2" : undefined, outline: copyFeedback ? "2px solid #50E3C2" : undefined, position: "relative" }}
         onClick={onCopy}
         disabled={!translationResult}
         aria-label="Copy output"
-      >📋 Copy</button>
+        tabIndex={0}
+        title={copyBtnTitle}
+      >
+        {copyFeedback ? "✔️ Copied!" : "📋 Copy"}
+      </button>
       <button
         className="btn"
-        style={{ marginRight: 8, backgroundColor: ttsActive ? '#50E3C2' : undefined }}
+        style={{
+          marginRight: 8,
+          backgroundColor: ttsActive ? '#50E3C2' : undefined,
+          transition: 'background 0.2s'
+        }}
         onClick={handleTTS}
         disabled={ttsDisabled}
-        aria-label="Speak/Playback output"
+        aria-label="Replay translation output (text-to-speech)"
+        tabIndex={0}
+        title={ttsBtnTitle}
       >
         {ttsActive ? "🔊 Playing…" : "🔈 Play"}
       </button>
       <button
         className="btn"
-        style={{ marginRight: 8 }}
+        style={{ marginRight: 8, borderColor: clearFeedback ? "#F5A623" : undefined, outline: clearFeedback ? "2px solid #F5A623" : undefined, position: "relative" }}
         onClick={onClear}
-        aria-label="Clear output"
-      >❌ Clear</button>
+        aria-label="Clear translation and input"
+        tabIndex={0}
+        title={clearBtnTitle}
+      >
+        {clearFeedback ? "✔️ Cleared" : "❌ Clear"}
+      </button>
       <span style={{ color: '#bbb' }}>(Output: {outputLanguage})</span>
     </div>
   );
@@ -261,10 +266,10 @@ function OutputControls({ translationResult, onCopy, onReplay, onClear, outputLa
 /* ---------------------------------
  * PUBLIC_INTERFACE
  * HistoryPanel
- * - Shows previous translations, highlights selected, and allows click to restore or replay
- * - Props: history, selectedIndex, onRestore, onReplay
+ * - Shows previous translations, highlights selected, click to restore, replay and clear.
+ * - Props: history, selectedIndex, onRestore, onReplay, onClearHistory
  */
-function HistoryPanel({ history, selectedIndex, onRestore, onReplay }) {
+function HistoryPanel({ history, selectedIndex, onRestore, onReplay, onClearHistory }) {
   return (
     <div style={{
       marginTop: 28,
@@ -273,7 +278,32 @@ function HistoryPanel({ history, selectedIndex, onRestore, onReplay }) {
       borderRadius: 8,
       minHeight: 60,
     }}>
-      <div style={{ fontWeight: 'bold', marginBottom: 8 }}>History</div>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 8, justifyContent: "space-between" }}>
+        <span style={{ fontWeight: 'bold' }}>History</span>
+        <button
+          type="button"
+          className="btn"
+          onClick={onClearHistory}
+          style={{
+            fontSize: "0.93em",
+            padding: "3px 16px",
+            backgroundColor: history.length === 0 ? '#555' : "#E87A41",
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+            marginLeft: 8,
+            opacity: history.length === 0 ? 0.6 : 1,
+            cursor: history.length === 0 ? "not-allowed" : "pointer",
+            transition: 'background 0.18s'
+          }}
+          aria-label="Clear translation history"
+          tabIndex={0}
+          title="Clear all translation history"
+          disabled={history.length === 0}
+        >
+          🗑️ Clear History
+        </button>
+      </div>
       {history.length === 0 ? (
         <div style={{ color: '#777' }}>No translation history.</div>
       ) : (
@@ -282,13 +312,16 @@ function HistoryPanel({ history, selectedIndex, onRestore, onReplay }) {
             <li
               key={item.timestamp || idx}
               style={{
-                padding: 8, marginBottom: 8,
+                padding: 8,
+                marginBottom: 8,
                 border: selectedIndex === idx ? '2px solid #F5A623' : '1px solid #252525',
                 background: selectedIndex === idx ? '#2a2f38' : undefined,
                 borderRadius: 5,
                 cursor: 'pointer',
                 boxShadow: selectedIndex === idx ? '0 0 6px #F5A62333' : undefined,
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
               }}
               onClick={() => onRestore(item, idx)}
               aria-current={selectedIndex === idx ? 'true' : undefined}
@@ -296,15 +329,16 @@ function HistoryPanel({ history, selectedIndex, onRestore, onReplay }) {
               onKeyPress={e => {
                 if (e.key === 'Enter' || e.key === ' ') onRestore(item, idx);
               }}
+              title="Click to restore translation to editor"
             >
               <div>
                 <span style={{ color: '#50E3C2' }}>{item.inputLanguage}</span> →
                 <span style={{ color: '#F5A623', marginLeft: 4 }}>{item.outputLanguage}</span>
                 <span style={{ marginLeft: 16, color: '#aaa', fontSize: '0.95em' }}>
-                  {item.inputText?.slice(0,24)}{item.inputText?.length > 24 ? '…' : ''}
+                  {item.inputText?.slice(0, 24)}{item.inputText?.length > 24 ? '…' : ''}
                 </span>
                 <div style={{ color: '#bbb', fontSize: '0.95em', marginTop: 2 }}>
-                  {item.translationResult?.slice(0,36)}{item.translationResult?.length > 36 ? '…' : ''}
+                  {item.translationResult?.slice(0, 36)}{item.translationResult?.length > 36 ? '…' : ''}
                 </div>
               </div>
               <button
@@ -318,9 +352,10 @@ function HistoryPanel({ history, selectedIndex, onRestore, onReplay }) {
                   border: 'none',
                   padding: '2px 12px',
                   borderRadius: 4,
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  outline: 'none'
                 }}
-                title="Replay translation output (TTS)"
+                title="Replay this translation output with text-to-speech"
                 onClick={e => { e.stopPropagation(); onReplay && onReplay(item); }}
                 tabIndex={-1}
               >
@@ -393,16 +428,32 @@ function MainContainer() {
     }
   };
 
-  // Handles TTS replay for current translation OR for history entry
+  // -- Feedback state for copy and clear --
+  const [copyFeedback, setCopyFeedback] = useState('');
+  const [clearFeedback, setClearFeedback] = useState('');
+
+  // Handles Copy to Clipboard, provides temporary feedback
+  const handleCopy = () => {
+    if (!translationResult) return;
+    navigator.clipboard.writeText(translationResult)
+      .then(() => {
+        setCopyFeedback('Copied!');
+        setTimeout(() => setCopyFeedback(''), 1200);
+      })
+      .catch(() => {
+        setCopyFeedback('Copy failed');
+        setTimeout(() => setCopyFeedback(''), 1200);
+      });
+  };
+
+  // Replay TTS for current translation or history entry
   const replayRef = useRef(null);
   const handleReplay = (item) => {
     // If item is provided (from HistoryPanel), replay that text/language
     // If not, replayRef.current will speak the current translationResult
     if (item && window.speechSynthesis && item.translationResult) {
-      // Use browser TTS for history entry's language
       const speak = () => {
         let utter = new window.SpeechSynthesisUtterance(item.translationResult);
-        // Try to find a voice for the output language
         const voices = window.speechSynthesis.getVoices();
         let voice =
           voices.find(
@@ -417,7 +468,6 @@ function MainContainer() {
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utter);
       };
-      // Wait for voices if needed
       if (window.speechSynthesis.getVoices().length === 0) {
         window.speechSynthesis.onvoiceschanged = speak;
       } else {
@@ -429,11 +479,20 @@ function MainContainer() {
     if (replayRef.current) replayRef.current();
   };
 
+  // Clear output and show feedback
   const handleClear = () => {
     setInputText('');
     setTranslationResult('');
     setTranslationError('');
-    setSelectedHistoryIdx(-1); // reverts to default
+    setSelectedHistoryIdx(-1);
+    setClearFeedback('Cleared!');
+    setTimeout(() => setClearFeedback(''), 1200);
+  };
+
+  // Clear the History entirely
+  const handleClearHistory = () => {
+    setHistory([]);
+    setSelectedHistoryIdx(-1);
   };
 
   // -- Restore from history, track selection, populate states without triggering new translation immediately
@@ -450,18 +509,13 @@ function MainContainer() {
 
   // When a new translation result arrives, store it in history if it's not a duplicate of latest
   useEffect(() => {
-    // Only trigger if inputText is not empty, output language selected, and not replaying a history
     if (!inputText || !outputLanguage || selectedHistoryIdx !== -1) {
-      // selectedHistoryIdx prevents new translations while viewing/restoring history, unless user edits input
       return;
     }
-    // Prevent duplicate/frequent requests (skip if nothing meaningful changed)
     const key = `${inputText}::${inputLanguage}::${outputLanguage}`;
     if (lastTranslationRef.current.key === key) {
-      // Did not change
       return;
     }
-    // Track this request
     lastTranslationRef.current.key = key;
 
     let canceled = false;
@@ -476,7 +530,6 @@ function MainContainer() {
       if (!canceled) {
         setTranslationResult(result.translatedText);
         setTranslationError('');
-        // Store in history if not duplicate (compare to previous)
         setHistory(prev => {
           if (
             prev.length &&
@@ -496,7 +549,7 @@ function MainContainer() {
           };
           return [entry, ...prev].slice(0, 10);
         });
-        setSelectedHistoryIdx(-1); // Current input is now at top (not a history slot)
+        setSelectedHistoryIdx(-1);
       }
     }).catch(err => {
       if (!canceled) {
@@ -507,7 +560,6 @@ function MainContainer() {
       if (!canceled) setTranslationInProgress(false);
     });
 
-    // Cleanup if effect re-runs/cancels
     return () => { canceled = true; };
   }, [inputText, inputLanguage, outputLanguage, selectedHistoryIdx]);
 
@@ -547,6 +599,8 @@ function MainContainer() {
         onReplay={replayRef}
         onClear={handleClear}
         outputLanguage={outputLanguage}
+        copyFeedback={copyFeedback}
+        clearFeedback={clearFeedback}
       />
 
       {/* HistoryPanel receives history, highlights selection, and enables review/restoration */}
@@ -555,6 +609,7 @@ function MainContainer() {
         selectedIndex={selectedHistoryIdx}
         onRestore={handleRestore}
         onReplay={handleReplay}
+        onClearHistory={handleClearHistory}
       />
     </div>
   );
