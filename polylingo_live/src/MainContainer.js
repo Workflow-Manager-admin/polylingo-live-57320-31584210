@@ -151,15 +151,10 @@ function TranslationDisplay({ translationResult, outputLanguage, translationInPr
 /* ---------------------------------
  * PUBLIC_INTERFACE
  * OutputControls
- * - Buttons for Copy, Replay, Clear
- * - Props: translationResult, onCopy, onReplay, onClear, outputLanguage
- */
-/**
- * PUBLIC_INTERFACE
- * OutputControls
- * - Buttons for Copy, Replay (TTS), Clear
+ * - Buttons for Copy, Replay, Clear, and TTS (Text-to-Speech)
  * - Props: translationResult, onCopy, outputLanguage, etc.
  */
+// PUBLIC_INTERFACE
 function OutputControls({ translationResult, onCopy, onReplay, onClear, outputLanguage }) {
   // --- TTS state and play function
   const [ttsActive, setTtsActive] = React.useState(false);
@@ -212,6 +207,14 @@ function OutputControls({ translationResult, onCopy, onReplay, onClear, outputLa
       speak();
     }
   }, [translationResult, outputLanguage]);
+
+  // Provide the functionality to the Replay prop too, for MainContainer (for interface symmetry)
+  React.useEffect(() => {
+    if (onReplay) {
+      // Optionally, allow triggering TTS externally via onReplay
+      onReplay.current = handleTTS;
+    }
+  }, [handleTTS, onReplay]);
 
   // Prevent multiple overlapping playbacks
   React.useEffect(() => {
@@ -359,9 +362,25 @@ function MainContainer() {
     setInputMethod('voice');
   };
 
-  // -- Output Action Handlers (stub) --
-  const handleCopy = () => window.alert('Copy not implemented');
-  const handleReplay = () => window.alert('Replay not implemented');
+  // -- Output Action Handlers (including TTS for Replay) --
+  const handleCopy = () => {
+    if (!translationResult) return;
+    try {
+      navigator.clipboard.writeText(translationResult);
+      window.alert('Copied!');
+    } catch {
+      window.alert('Copy failed.');
+    }
+  };
+
+  // Instead of stub, wire replay to TTS via a ref
+  const replayRef = useRef(null);
+  const handleReplay = () => {
+    if (replayRef.current) {
+      replayRef.current();
+    }
+  };
+
   const handleClear = () => {
     setInputText('');
     setTranslationResult('');
@@ -472,7 +491,7 @@ function MainContainer() {
       <OutputControls
         translationResult={translationResult}
         onCopy={handleCopy}
-        onReplay={handleReplay}
+        onReplay={replayRef}
         onClear={handleClear}
         outputLanguage={outputLanguage}
       />
