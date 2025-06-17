@@ -159,4 +159,4 @@ ERROR in Error: Child compilation failed:
     [polylingo_live]/[webpack]/lib/Compilation.js:3404:11
 
 1 ERROR in child compilations (Use 'stats.children: true' resp. '--stats-children' for more details)
-webpack 5.99.9 compiled with 2 errors in 1304 ms
+webpack 5.99.9 compiled with 2 errors in 1339 ms

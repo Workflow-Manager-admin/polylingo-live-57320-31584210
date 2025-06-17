@@ -154,12 +154,102 @@ function TranslationDisplay({ translationResult, outputLanguage, translationInPr
  * - Buttons for Copy, Replay, Clear
  * - Props: translationResult, onCopy, onReplay, onClear, outputLanguage
  */
+/**
+ * PUBLIC_INTERFACE
+ * OutputControls
+ * - Buttons for Copy, Replay (TTS), Clear
+ * - Props: translationResult, onCopy, outputLanguage, etc.
+ */
 function OutputControls({ translationResult, onCopy, onReplay, onClear, outputLanguage }) {
+  // --- TTS state and play function
+  const [ttsActive, setTtsActive] = React.useState(false);
+  const ttsUtteranceRef = React.useRef(null);
+
+  // Map language code to TTS voice
+  // This function will pick the first matching voice for the language code
+  function getVoiceForLang(lang) {
+    if (!window.speechSynthesis) return null;
+    // Try to pick a matching browser voice for the language code.
+    // 'en' => 'en', 'es' => 'es', etc.
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return null;
+    // Sometimes languages like 'es' are 'es-ES' or 'en-US', so use startsWith
+    let selected = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(lang.toLowerCase()));
+    // Fallback: try just first matching pair
+    if (!selected) {
+      selected = voices.find(v => v.lang && v.lang.toLowerCase().split('-')[0] === lang.toLowerCase());
+    }
+    // If still nothing, use default
+    return selected || voices[0];
+  }
+
+  // PUBLIC_INTERFACE
+  // Play translated text out loud via SpeechSynthesis
+  const handleTTS = React.useCallback(() => {
+    if (!translationResult || !window.speechSynthesis) return;
+    setTtsActive(true);
+
+    // Cancel any existing speech
+    window.speechSynthesis.cancel();
+
+    // Wait for voices to be loaded if needed
+    const speak = () => {
+      let utter = new window.SpeechSynthesisUtterance(translationResult);
+      // Assign the voice for correct language
+      const voice = getVoiceForLang(outputLanguage);
+      if (voice) utter.voice = voice;
+      utter.lang = (voice && voice.lang) || outputLanguage;
+      utter.onend = () => setTtsActive(false);
+      utter.onerror = () => setTtsActive(false);
+      ttsUtteranceRef.current = utter;
+      window.speechSynthesis.speak(utter);
+    };
+
+    // Voices might not be loaded right away (asynchronously)
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.speechSynthesis.onvoiceschanged = speak;
+    } else {
+      speak();
+    }
+  }, [translationResult, outputLanguage]);
+
+  // Prevent multiple overlapping playbacks
+  React.useEffect(() => {
+    return () => {
+      // On unmount, cancel any active speech
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  // Button disables
+  const ttsDisabled = !translationResult || ttsActive;
+
   return (
-    <div style={{ marginBottom: 16 }}>
-      <button className="btn" style={{ marginRight: 8 }} onClick={onCopy} disabled={!translationResult}>📋 Copy</button>
-      <button className="btn" style={{ marginRight: 8 }} onClick={onReplay} disabled={!translationResult}>🔈 Replay</button>
-      <button className="btn" style={{ marginRight: 8 }} onClick={onClear}>❌ Clear</button>
+    <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <button
+        className="btn"
+        style={{ marginRight: 8 }}
+        onClick={onCopy}
+        disabled={!translationResult}
+        aria-label="Copy output"
+      >📋 Copy</button>
+      <button
+        className="btn"
+        style={{ marginRight: 8, backgroundColor: ttsActive ? '#50E3C2' : undefined }}
+        onClick={handleTTS}
+        disabled={ttsDisabled}
+        aria-label="Speak/Playback output"
+      >
+        {ttsActive ? "🔊 Playing…" : "🔈 Play"}
+      </button>
+      <button
+        className="btn"
+        style={{ marginRight: 8 }}
+        onClick={onClear}
+        aria-label="Clear output"
+      >❌ Clear</button>
       <span style={{ color: '#bbb' }}>(Output: {outputLanguage})</span>
     </div>
   );
