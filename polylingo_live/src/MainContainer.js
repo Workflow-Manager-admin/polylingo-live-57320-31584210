@@ -261,10 +261,10 @@ function OutputControls({ translationResult, onCopy, onReplay, onClear, outputLa
 /* ---------------------------------
  * PUBLIC_INTERFACE
  * HistoryPanel
- * - Shows previous translations
- * - Props: history, onRestore
+ * - Shows previous translations, highlights selected, and allows click to restore or replay
+ * - Props: history, selectedIndex, onRestore, onReplay
  */
-function HistoryPanel({ history, onRestore }) {
+function HistoryPanel({ history, selectedIndex, onRestore, onReplay }) {
   return (
     <div style={{
       marginTop: 28,
@@ -283,11 +283,19 @@ function HistoryPanel({ history, onRestore }) {
               key={item.timestamp || idx}
               style={{
                 padding: 8, marginBottom: 8,
-                border: '1px solid #252525',
+                border: selectedIndex === idx ? '2px solid #F5A623' : '1px solid #252525',
+                background: selectedIndex === idx ? '#2a2f38' : undefined,
                 borderRadius: 5,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                boxShadow: selectedIndex === idx ? '0 0 6px #F5A62333' : undefined,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
               }}
-              onClick={() => onRestore(item)}
+              onClick={() => onRestore(item, idx)}
+              aria-current={selectedIndex === idx ? 'true' : undefined}
+              tabIndex={0}
+              onKeyPress={e => {
+                if (e.key === 'Enter' || e.key === ' ') onRestore(item, idx);
+              }}
             >
               <div>
                 <span style={{ color: '#50E3C2' }}>{item.inputLanguage}</span> →
@@ -295,10 +303,29 @@ function HistoryPanel({ history, onRestore }) {
                 <span style={{ marginLeft: 16, color: '#aaa', fontSize: '0.95em' }}>
                   {item.inputText?.slice(0,24)}{item.inputText?.length > 24 ? '…' : ''}
                 </span>
+                <div style={{ color: '#bbb', fontSize: '0.95em', marginTop: 2 }}>
+                  {item.translationResult?.slice(0,36)}{item.translationResult?.length > 36 ? '…' : ''}
+                </div>
               </div>
-              <div style={{ color: '#bbb', fontSize: '0.95em', marginTop: 2 }}>
-                {item.translationResult?.slice(0,36)}{item.translationResult?.length > 36 ? '…' : ''}
-              </div>
+              <button
+                className="btn"
+                type="button"
+                style={{
+                  marginLeft: 12,
+                  fontSize: '0.9em',
+                  backgroundColor: '#22293a',
+                  color: '#F5A623',
+                  border: 'none',
+                  padding: '2px 12px',
+                  borderRadius: 4,
+                  cursor: 'pointer'
+                }}
+                title="Replay translation output (TTS)"
+                onClick={e => { e.stopPropagation(); onReplay && onReplay(item); }}
+                tabIndex={-1}
+              >
+                🔈
+              </button>
             </li>
           ))}
         </ul>
@@ -311,58 +338,51 @@ function HistoryPanel({ history, onRestore }) {
  * PUBLIC_INTERFACE
  * MainContainer
  * - Top-level container holding all UI regions for PolyLingo Live
+ *
+ * Tracks a bounded in-memory array of translation history,
+ * provides a list for review/replay, and allows navigation to any translation.
  */
 function MainContainer() {
   // --- Core state hooks ---
   const [inputText, setInputText] = useState('');
   const [autoDetect, setAutoDetect] = useState(true);
-  // If auto-detect is on, force "auto"; else user's selected language
   const [inputLanguage, setInputLanguage] = useState('auto');
   const [outputLanguage, setOutputLanguage] = useState('en');
   const [translationResult, setTranslationResult] = useState('');
   const [translationInProgress, setTranslationInProgress] = useState(false);
   const [translationError, setTranslationError] = useState('');
   const [inputMethod, setInputMethod] = useState('text');
-  const [history, setHistory] = useState([
-    {
-      inputText: 'Hola, ¿cómo estás?',
-      inputLanguage: 'es',
-      outputLanguage: 'en',
-      translationResult: 'Hello, how are you?',
-      timestamp: Date.now() - 240000,
-    },
-    {
-      inputText: 'Bonjour!',
-      inputLanguage: 'fr',
-      outputLanguage: 'en',
-      translationResult: 'Hello!',
-      timestamp: Date.now() - 360000,
-    }
-  ]);
+  // History is bounded to 10, each item: {inputText, inputLanguage, outputLanguage, translationResult, timestamp}
+  const [history, setHistory] = useState([]);
+  // Track selected history index, -1 means "current" input, else the index in history array
+  const [selectedHistoryIdx, setSelectedHistoryIdx] = useState(-1);
+
   // Track last parameters to avoid duplicate API requests
   const lastTranslationRef = useRef({});
 
   // -- Language Selector Change Handlers --
-  // Changes the input language only if autoDetect is off
   const handleInputLanguageChange = lang => {
     if (!autoDetect) setInputLanguage(lang);
+    // leave as is if autoDetect
   };
-  // Toggles the auto-detect and makes sure input language is 'auto' when enabled.
   const handleAutoDetectChange = checked => {
     setAutoDetect(checked);
     if (checked) setInputLanguage('auto');
   };
-  // Always allow the output language to be changed
   const handleOutputLanguageChange = lang => setOutputLanguage(lang);
 
   // -- Input/Output Handlers --
-  const handleInputTextChange = txt => setInputText(txt);
+  const handleInputTextChange = txt => {
+    setInputText(txt);
+    setSelectedHistoryIdx(-1); // act as new input, not from history
+  };
   const handleInputVoice = () => {
     setInputText('Simulated voice text.');
     setInputMethod('voice');
+    setSelectedHistoryIdx(-1);
   };
 
-  // -- Output Action Handlers (including TTS for Replay) --
+  // -- Output Action Handlers --
   const handleCopy = () => {
     if (!translationResult) return;
     try {
@@ -373,46 +393,74 @@ function MainContainer() {
     }
   };
 
-  // Instead of stub, wire replay to TTS via a ref
+  // Handles TTS replay for current translation OR for history entry
   const replayRef = useRef(null);
-  const handleReplay = () => {
-    if (replayRef.current) {
-      replayRef.current();
+  const handleReplay = (item) => {
+    // If item is provided (from HistoryPanel), replay that text/language
+    // If not, replayRef.current will speak the current translationResult
+    if (item && window.speechSynthesis && item.translationResult) {
+      // Use browser TTS for history entry's language
+      const speak = () => {
+        let utter = new window.SpeechSynthesisUtterance(item.translationResult);
+        // Try to find a voice for the output language
+        const voices = window.speechSynthesis.getVoices();
+        let voice =
+          voices.find(
+            v => v.lang && v.lang.toLowerCase().startsWith(item.outputLanguage?.toLowerCase())
+          ) ||
+          voices.find(
+            v => v.lang && v.lang.toLowerCase().split('-')[0] === item.outputLanguage?.toLowerCase()
+          ) ||
+          voices[0];
+        if (voice) utter.voice = voice;
+        utter.lang = (voice && voice.lang) || item.outputLanguage;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utter);
+      };
+      // Wait for voices if needed
+      if (window.speechSynthesis.getVoices().length === 0) {
+        window.speechSynthesis.onvoiceschanged = speak;
+      } else {
+        speak();
+      }
+      return;
     }
+    // Else default replay via OutputControls TTS
+    if (replayRef.current) replayRef.current();
   };
 
   const handleClear = () => {
     setInputText('');
     setTranslationResult('');
     setTranslationError('');
+    setSelectedHistoryIdx(-1); // reverts to default
   };
 
-  // -- Restore from history, set language/auto mode as stored in entry --
-  const handleRestore = (item) => {
+  // -- Restore from history, track selection, populate states without triggering new translation immediately
+  const handleRestore = (item, idx) => {
     setInputText(item.inputText);
     setInputLanguage(item.inputLanguage);
     setOutputLanguage(item.outputLanguage);
     setTranslationResult(item.translationResult || '');
     setAutoDetect(item.inputLanguage === 'auto');
     setTranslationError('');
+    setSelectedHistoryIdx(idx);
+    setInputMethod('text');
   };
 
-  // -- Real-time translation logic --
+  // When a new translation result arrives, store it in history if it's not a duplicate of latest
   useEffect(() => {
-    // Only trigger if inputText is not empty, output language selected, non-trivial case
-    if (!inputText || !outputLanguage) {
-      setTranslationResult('');
-      setTranslationError('');
+    // Only trigger if inputText is not empty, output language selected, and not replaying a history
+    if (!inputText || !outputLanguage || selectedHistoryIdx !== -1) {
+      // selectedHistoryIdx prevents new translations while viewing/restoring history, unless user edits input
       return;
     }
-
     // Prevent duplicate/frequent requests (skip if nothing meaningful changed)
     const key = `${inputText}::${inputLanguage}::${outputLanguage}`;
     if (lastTranslationRef.current.key === key) {
       // Did not change
       return;
     }
-
     // Track this request
     lastTranslationRef.current.key = key;
 
@@ -428,18 +476,27 @@ function MainContainer() {
       if (!canceled) {
         setTranslationResult(result.translatedText);
         setTranslationError('');
-
-        // Store in history, most recent first
-        setHistory(prev => ([
-          {
+        // Store in history if not duplicate (compare to previous)
+        setHistory(prev => {
+          if (
+            prev.length &&
+            prev[0].inputText === inputText &&
+            prev[0].inputLanguage === inputLanguage &&
+            prev[0].outputLanguage === outputLanguage &&
+            prev[0].translationResult === result.translatedText
+          ) {
+            return prev; // don't insert duplicate
+          }
+          const entry = {
             inputText,
             inputLanguage,
             outputLanguage,
             translationResult: result.translatedText,
             timestamp: Date.now()
-          },
-          ...prev
-        ].slice(0, 10))); // Max 10 entries
+          };
+          return [entry, ...prev].slice(0, 10);
+        });
+        setSelectedHistoryIdx(-1); // Current input is now at top (not a history slot)
       }
     }).catch(err => {
       if (!canceled) {
@@ -450,13 +507,12 @@ function MainContainer() {
       if (!canceled) setTranslationInProgress(false);
     });
 
-    // Cleanup if effect re-runs/cancels, do not update for obsolete requests
+    // Cleanup if effect re-runs/cancels
     return () => { canceled = true; };
-  }, [inputText, inputLanguage, outputLanguage]);
+  }, [inputText, inputLanguage, outputLanguage, selectedHistoryIdx]);
 
   return (
     <div className="container" style={{ maxWidth: 720, marginBottom: 64 }}>
-      {/* Language selection (top) including auto-detect and proper state wiring */}
       <LanguageSelector
         inputLanguage={inputLanguage}
         outputLanguage={outputLanguage}
@@ -466,7 +522,6 @@ function MainContainer() {
         onAutoDetectChange={handleAutoDetectChange}
       />
 
-      {/* Input area, inputLanguage reflects state (forced 'auto' if autoDetect true) */}
       <InputArea
         inputText={inputText}
         onInputTextChange={handleInputTextChange}
@@ -476,7 +531,6 @@ function MainContainer() {
         inputLanguage={inputLanguage}
       />
 
-      {/* TranslationDisplay stateless; fully controlled output */}
       <TranslationDisplay
         translationResult={
           translationError
@@ -487,7 +541,6 @@ function MainContainer() {
         translationInProgress={translationInProgress}
       />
 
-      {/* OutputControls (copy/tts/clear actions) */}
       <OutputControls
         translationResult={translationResult}
         onCopy={handleCopy}
@@ -496,10 +549,12 @@ function MainContainer() {
         outputLanguage={outputLanguage}
       />
 
-      {/* HistoryPanel receives all relevant props (history, restore logic) */}
+      {/* HistoryPanel receives history, highlights selection, and enables review/restoration */}
       <HistoryPanel
         history={history}
+        selectedIndex={selectedHistoryIdx}
         onRestore={handleRestore}
+        onReplay={handleReplay}
       />
     </div>
   );
