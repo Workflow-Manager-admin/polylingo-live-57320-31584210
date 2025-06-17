@@ -227,16 +227,16 @@ function HistoryPanel({ history, onRestore }) {
  * - Top-level container holding all UI regions for PolyLingo Live
  */
 function MainContainer() {
-  // Demo state only; these would be wired to backend/smart logic in future steps
+  // --- Core state hooks ---
   const [inputText, setInputText] = useState('');
-  const [autoDetect, setAutoDetect] = useState(true); // new: auto-detect toggle
-  const [inputLanguage, setInputLanguage] = useState('auto'); // will be 'auto' or language code
+  const [autoDetect, setAutoDetect] = useState(true);
+  // If auto-detect is on, force "auto"; else user's selected language
+  const [inputLanguage, setInputLanguage] = useState('auto');
   const [outputLanguage, setOutputLanguage] = useState('en');
   const [translationResult, setTranslationResult] = useState('');
-  const [translationInProgress] = useState(false); // hardcoded false for demo stub
+  const [translationInProgress] = useState(false); // stub, should eventually be stateful
   const [inputMethod, setInputMethod] = useState('text');
   const [history, setHistory] = useState([
-    // Pre-seeded history entries as demo
     {
       inputText: 'Hola, ¿cómo estás?',
       inputLanguage: 'es',
@@ -253,43 +253,46 @@ function MainContainer() {
     }
   ]);
 
-  // Subcomponent callback stubs
-  const handleInputTextChange = (txt) => setInputText(txt);
+  // -- Language Selector Change Handlers --
+  // Changes the input language only if autoDetect is off
+  const handleInputLanguageChange = lang => {
+    if (!autoDetect) setInputLanguage(lang);
+  };
+  // Toggles the auto-detect and makes sure input language is 'auto' when enabled.
+  const handleAutoDetectChange = checked => {
+    setAutoDetect(checked);
+    if (checked) setInputLanguage('auto');
+  };
+  // Always allow the output language to be changed
+  const handleOutputLanguageChange = lang => setOutputLanguage(lang);
 
+  // -- Input/Output Handlers --
+  const handleInputTextChange = txt => setInputText(txt);
   const handleInputVoice = () => {
     setInputText('Simulated voice text.');
     setInputMethod('voice');
   };
 
-  // If auto-detect is on, always set inputLanguage to 'auto'
-  const handleInputLanguageChange = (lang) => {
-    if (!autoDetect) setInputLanguage(lang);
-  };
-
-  const handleAutoDetectChange = (checked) => {
-    setAutoDetect(checked);
-    if (checked) setInputLanguage('auto');
-  };
-
-  const handleOutputLanguageChange = setOutputLanguage;
-
+  // -- Output Action Handlers (stub) --
   const handleCopy = () => window.alert('Copy not implemented');
   const handleReplay = () => window.alert('Replay not implemented');
   const handleClear = () => {
     setInputText('');
     setTranslationResult('');
   };
+
+  // -- Restore from history, set language/auto mode as stored in entry --
   const handleRestore = (item) => {
     setInputText(item.inputText);
     setInputLanguage(item.inputLanguage);
     setOutputLanguage(item.outputLanguage);
-    setTranslationResult(item.translationResult);
+    setTranslationResult(item.translationResult || '');
     setAutoDetect(item.inputLanguage === 'auto');
   };
 
   return (
     <div className="container" style={{ maxWidth: 720, marginBottom: 64 }}>
-      {/* Language selection (top) including auto-detect */}
+      {/* Language selection (top) including auto-detect and proper state wiring */}
       <LanguageSelector
         inputLanguage={inputLanguage}
         outputLanguage={outputLanguage}
@@ -299,7 +302,7 @@ function MainContainer() {
         onAutoDetectChange={handleAutoDetectChange}
       />
 
-      {/* Input area (text or voice) */}
+      {/* Input area, inputLanguage reflects state (forced 'auto' if autoDetect true) */}
       <InputArea
         inputText={inputText}
         onInputTextChange={handleInputTextChange}
@@ -309,14 +312,14 @@ function MainContainer() {
         inputLanguage={inputLanguage}
       />
 
-      {/* Translation output */}
+      {/* TranslationDisplay stateless; fully controlled output */}
       <TranslationDisplay
         translationResult={translationResult}
         outputLanguage={outputLanguage}
         translationInProgress={translationInProgress}
       />
 
-      {/* Output controls */}
+      {/* OutputControls (copy/tts/clear actions) */}
       <OutputControls
         translationResult={translationResult}
         onCopy={handleCopy}
@@ -325,7 +328,7 @@ function MainContainer() {
         outputLanguage={outputLanguage}
       />
 
-      {/* History panel */}
+      {/* HistoryPanel receives all relevant props (history, restore logic) */}
       <HistoryPanel
         history={history}
         onRestore={handleRestore}
