@@ -417,27 +417,17 @@ function MainContainer() {
     setSelectedHistoryIdx(-1);
   };
 
-  // -- Output Action Handlers --
-  const handleCopy = () => {
-    if (!translationResult) return;
-    try {
-      navigator.clipboard.writeText(translationResult);
-      window.alert('Copied!');
-    } catch {
-      window.alert('Copy failed.');
-    }
-  };
-
   // -- Feedback state for copy and clear --
   const [copyFeedback, setCopyFeedback] = useState('');
   const [clearFeedback, setClearFeedback] = useState('');
 
-  // Handles Copy to Clipboard, provides temporary feedback
+  // PUBLIC_INTERFACE
+  // Handles Copy to Clipboard, provides temporary feedback and accessibility announcements
   const handleCopy = () => {
     if (!translationResult) return;
     navigator.clipboard.writeText(translationResult)
       .then(() => {
-        setCopyFeedback('Copied!');
+        setCopyFeedback('✔️ Copied!');
         setTimeout(() => setCopyFeedback(''), 1200);
       })
       .catch(() => {
@@ -489,10 +479,13 @@ function MainContainer() {
     setTimeout(() => setClearFeedback(''), 1200);
   };
 
-  // Clear the History entirely
+  // PUBLIC_INTERFACE
+  // Clear the History entirely. Show feedback for a short time for accessibility.
   const handleClearHistory = () => {
     setHistory([]);
     setSelectedHistoryIdx(-1);
+    setClearFeedback('History Cleared!');
+    setTimeout(() => setClearFeedback(''), 1200);
   };
 
   // -- Restore from history, track selection, populate states without triggering new translation immediately
@@ -603,7 +596,7 @@ function MainContainer() {
         clearFeedback={clearFeedback}
       />
 
-      {/* HistoryPanel receives history, highlights selection, and enables review/restoration */}
+      {/* HistoryPanel receives history, highlights selection, shows feedback, and enables review/restoration */}
       <HistoryPanel
         history={history}
         selectedIndex={selectedHistoryIdx}
