@@ -1,182 +1,185 @@
 import React, { useState } from 'react';
 
-/* 
-  MainContainer scaffolding for PolyLingo Live
+/*
+  PolyLingo Live - MainContainer Scaffold
 
-  Layout:
-    - Language selection (top)
-    - Input area (text box, mic button)
-    - Translation output
-    - Controls (copy, replay, clear)
-    - Translation history panel
+  This is the main UI container for PolyLingo Live,
+  initially providing only layout and placeholder regions for:
 
-  All subcomponents below are basic stubs, to be replaced with detailed implementations.
+    - LanguageSelector: Selects input/output languages
+    - InputArea: User can type (or in future: speak) content
+    - TranslationDisplay: Displays translation output
+    - OutputControls: "Copy", "Replay", "Clear" actions
+    - HistoryPanel: Shows recent translations
+
+  These are stub, presentational-only components for now.
 */
 
-/* --------------------------------------------
+/* ---------------------------------
  * PUBLIC_INTERFACE
- * LanguageSelector - Select input and output languages
- * Props:
- *   - inputLanguage, outputLanguage
- *   - onInputLanguageChange, onOutputLanguageChange
+ * LanguageSelector
+ * - Selects input and output languages
+ * - Props: inputLanguage, outputLanguage, onInputLanguageChange, onOutputLanguageChange
  */
 function LanguageSelector({ inputLanguage, outputLanguage, onInputLanguageChange, onOutputLanguageChange }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <label>
-        Input Language:
-        <select value={inputLanguage} onChange={e => onInputLanguageChange(e.target.value)}>
-          <option value="auto">Auto-Detect</option>
-          <option value="en">English</option>
-          <option value="es">Spanish</option>
-          <option value="fr">French</option>
-          {/* TODO: add more language options */}
-        </select>
-      </label>
-      <span style={{ margin: '0 12px' }}>→</span>
-      <label>
-        Output Language:
-        <select value={outputLanguage} onChange={e => onOutputLanguageChange(e.target.value)}>
-          <option value="en">English</option>
-          <option value="es">Spanish</option>
-          <option value="fr">French</option>
-          {/* TODO: add more language options */}
-        </select>
-      </label>
-    </div>
-  );
-}
-
-/* --------------------------------------------
- * PUBLIC_INTERFACE
- * InputArea - Entry point for text (or future voice)
- * Props:
- *   - inputText
- *   - onInputTextChange, onInputVoice
- *   - inputMethod, setInputMethod
- *   - inputLanguage
- */
-function InputArea({ inputText, onInputTextChange, onInputVoice, inputMethod, setInputMethod, inputLanguage }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <textarea
-        style={{ width: '100%', minHeight: 48, marginBottom: 8 }}
-        value={inputText}
-        placeholder={`Type (or speak) text in ${inputLanguage === 'auto' ? 'any language' : inputLanguage}...`}
-        onChange={e => onInputTextChange(e.target.value)}
-      />
+    <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
       <div>
-        <button
-          type="button"
-          className="btn"
-          style={{ marginRight: 8 }}
-          onClick={() => setInputMethod('text')}
-          disabled={inputMethod === 'text'}
-        >
-          ✍️ Text
-        </button>
-        <button
-          type="button"
-          className="btn"
-          onClick={onInputVoice}
-          style={{ marginRight: 8 }}
-        >
-          🎤 Speak
-        </button>
-        <span style={{ color: '#bbb' }}>Input mode: <b>{inputMethod}</b></span>
+        <label>
+          Input:&nbsp;
+          <select value={inputLanguage} onChange={e => onInputLanguageChange(e.target.value)}>
+            <option value="auto">Auto-Detect</option>
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            {/* Add more languages here */}
+          </select>
+        </label>
+      </div>
+      <div style={{ fontSize: '1.25rem', color: '#bbb' }}>→</div>
+      <div>
+        <label>
+          Output:&nbsp;
+          <select value={outputLanguage} onChange={e => onOutputLanguageChange(e.target.value)}>
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            {/* Add more languages here */}
+          </select>
+        </label>
       </div>
     </div>
   );
 }
 
-/* --------------------------------------------
+/* ---------------------------------
  * PUBLIC_INTERFACE
- * TranslationDisplay - Shows the translation output
- * Props:
- *   - translationResult
- *   - outputLanguage
- *   - translationInProgress
+ * InputArea
+ * - Area for entering text (or triggering voice)
+ * - Props: inputText, inputLanguage, inputMethod, onInputTextChange, onInputVoice, setInputMethod
+ */
+function InputArea({ inputText, onInputTextChange, onInputVoice, inputMethod, setInputMethod, inputLanguage }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <textarea
+        style={{
+          width: '100%',
+          minHeight: '2.25em',
+          fontSize: 16,
+          padding: 8,
+          resize: 'vertical',
+          marginBottom: 8,
+        }}
+        value={inputText}
+        placeholder={`Type or speak in ${inputLanguage === 'auto' ? 'any language' : inputLanguage}`}
+        onChange={e => onInputTextChange(e.target.value)}
+      />
+      <br />
+      <button
+        type="button"
+        className="btn"
+        onClick={() => setInputMethod('text')}
+        disabled={inputMethod === 'text'}
+        style={{ marginRight: 8 }}
+      >
+        ✍️ Text
+      </button>
+      <button
+        type="button"
+        className="btn"
+        onClick={onInputVoice}
+        style={{ marginRight: 8 }}
+      >
+        🎤 Voice
+      </button>
+      <span style={{ color: '#bbb' }}>Input mode: <b>{inputMethod}</b></span>
+    </div>
+  );
+}
+
+/* ---------------------------------
+ * PUBLIC_INTERFACE
+ * TranslationDisplay
+ * - Shows the translation output
+ * - Props: translationResult, outputLanguage, translationInProgress
  */
 function TranslationDisplay({ translationResult, outputLanguage, translationInProgress }) {
   return (
-    <div style={{ margin: '16px 0', minHeight: 40, background: '#222', padding: 16, borderRadius: 8 }}>
+    <div style={{
+      minHeight: 40,
+      background: '#181e23',
+      padding: 16,
+      borderRadius: 8,
+      margin: '12px 0',
+      fontSize: 18,
+      color: translationInProgress ? '#666' : '#fff'
+    }}>
       {translationInProgress ? (
         <span>Translating...</span>
       ) : translationResult ? (
         <span>{translationResult}</span>
       ) : (
-        <span style={{ color: '#666' }}>Translation will appear here</span>
+        <span style={{ color: '#555' }}>Translation will appear here.</span>
       )}
     </div>
   );
 }
 
-/* --------------------------------------------
+/* ---------------------------------
  * PUBLIC_INTERFACE
- * OutputControls - Copy, replay (TTS), clear, etc.
- * Props:
- *   - translationResult
- *   - onCopy, onReplay, onClear
- *   - outputLanguage
+ * OutputControls
+ * - Buttons for Copy, Replay, Clear
+ * - Props: translationResult, onCopy, onReplay, onClear, outputLanguage
  */
 function OutputControls({ translationResult, onCopy, onReplay, onClear, outputLanguage }) {
-  const actionsDisabled = !translationResult || translationResult.length === 0;
   return (
     <div style={{ marginBottom: 16 }}>
-      <button className="btn" style={{ marginRight: 8 }} disabled={actionsDisabled} onClick={onCopy}>
-        📋 Copy
-      </button>
-      <button className="btn" style={{ marginRight: 8 }} disabled={actionsDisabled} onClick={onReplay}>
-        🔈 Replay
-      </button>
-      <button className="btn" style={{ marginRight: 8 }} disabled={actionsDisabled} onClick={onClear}>
-        ❌ Clear
-      </button>
+      <button className="btn" style={{ marginRight: 8 }} onClick={onCopy} disabled={!translationResult}>📋 Copy</button>
+      <button className="btn" style={{ marginRight: 8 }} onClick={onReplay} disabled={!translationResult}>🔈 Replay</button>
+      <button className="btn" style={{ marginRight: 8 }} onClick={onClear}>❌ Clear</button>
       <span style={{ color: '#bbb' }}>(Output: {outputLanguage})</span>
     </div>
   );
 }
 
-/* --------------------------------------------
+/* ---------------------------------
  * PUBLIC_INTERFACE
- * HistoryPanel - Shows translation history
- * Props:
- *   - history: array of { inputText, inputLanguage, outputLanguage, translationResult, timestamp }
- *   - onRestore: handler to restore past translation
+ * HistoryPanel
+ * - Shows previous translations
+ * - Props: history, onRestore
  */
 function HistoryPanel({ history, onRestore }) {
   return (
-    <div style={{ marginTop: 24, background: '#181818', padding: 16, borderRadius: 8 }}>
-      <div style={{ fontWeight: 'bold', marginBottom: 8 }}>Translation History</div>
+    <div style={{
+      marginTop: 28,
+      padding: 14,
+      background: '#232730',
+      borderRadius: 8,
+      minHeight: 60,
+    }}>
+      <div style={{ fontWeight: 'bold', marginBottom: 8 }}>History</div>
       {history.length === 0 ? (
-        <div style={{ color: '#666' }}>No history yet.</div>
+        <div style={{ color: '#777' }}>No translation history.</div>
       ) : (
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {history.slice().reverse().map((item, idx) => (
-            <li key={item.timestamp || idx}
-                style={{
-                  marginBottom: 8,
-                  padding: 8,
-                  border: '1px solid #222',
-                  borderRadius: 5,
-                  cursor: 'pointer'
-                }}
-                onClick={() => onRestore(item)}
+        <ul style={{ listStyle: 'none', paddingLeft: 0, margin: 0 }}>
+          {history.map((item, idx) => (
+            <li
+              key={item.timestamp || idx}
+              style={{
+                padding: 8, marginBottom: 8,
+                border: '1px solid #252525',
+                borderRadius: 5,
+                cursor: 'pointer'
+              }}
+              onClick={() => onRestore(item)}
             >
               <div>
-                <span style={{ color: '#50E3C2', marginRight: 4 }}>{item.inputLanguage}</span>
-                <span style={{ color: '#888' }}>→</span>
+                <span style={{ color: '#50E3C2' }}>{item.inputLanguage}</span> →
                 <span style={{ color: '#F5A623', marginLeft: 4 }}>{item.outputLanguage}</span>
-                <span style={{ marginLeft: 8, color: '#aaa', fontSize: '0.92em' }}>
-                  {item.inputText.substring(0, 32)}
-                  {item.inputText.length > 32 ? '…' : ''}
-                </span>
-                <span style={{ float: 'right', color: '#333', fontSize: '0.85em' }}>
-                  {item.timestamp ? (new Date(item.timestamp).toLocaleTimeString()) : ''}
+                <span style={{ marginLeft: 16, color: '#aaa', fontSize: '0.95em' }}>
+                  {item.inputText?.slice(0,24)}{item.inputText?.length > 24 ? '…' : ''}
                 </span>
               </div>
               <div style={{ color: '#bbb', fontSize: '0.95em', marginTop: 2 }}>
-                {item.translationResult.substring(0, 48)}{item.translationResult.length > 48 ? '…' : ''}
+                {item.translationResult?.slice(0,36)}{item.translationResult?.length > 36 ? '…' : ''}
               </div>
             </li>
           ))}
@@ -186,91 +189,63 @@ function HistoryPanel({ history, onRestore }) {
   );
 }
 
-/* --------------------------------------------
+/* ---------------------------------
  * PUBLIC_INTERFACE
- * MainContainer - Primary app container for PolyLingo Live
- * All main state and callback logic are kept here.
+ * MainContainer
+ * - Top-level container holding all UI regions for PolyLingo Live
  */
 function MainContainer() {
-  // --- App State (placeholders for now) ---
+  // Demo state only; these would be wired to backend/smart logic in future steps
   const [inputText, setInputText] = useState('');
-  const [inputLanguage, setInputLanguage] = useState('auto'); // e.g., 'en', 'es', 'auto'
-  const [outputLanguage, setOutputLanguage] = useState('en'); // e.g., 'es'
+  const [inputLanguage, setInputLanguage] = useState('auto');
+  const [outputLanguage, setOutputLanguage] = useState('en');
   const [translationResult, setTranslationResult] = useState('');
-  const [translationInProgress, setTranslationInProgress] = useState(false);
-  const [inputMethod, setInputMethod] = useState('text'); // 'text' or 'voice'
-  const [history, setHistory] = useState([]);
-
-  // --- Callbacks ---
-  // Input handlers
-  const handleInputTextChange = (text) => setInputText(text);
-
-  // Placeholder for future: triggers voice input (e.g. activates SpeechRecognition)
-  const handleInputVoice = () => {
-    // Here we'd integrate voice input!
-    const simulatedVoiceText = 'Hello from voice input!';
-    setInputMethod('voice');
-    setInputText(simulatedVoiceText);
-  };
-
-  const handleInputLanguageChange = (lang) => setInputLanguage(lang);
-  const handleOutputLanguageChange = (lang) => setOutputLanguage(lang);
-
-  // Output controls
-  const handleCopy = () => {
-    if (translationResult) {
-      // Try to copy to clipboard
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(translationResult);
-      }
+  const [translationInProgress] = useState(false); // hardcoded false for demo stub
+  const [inputMethod, setInputMethod] = useState('text');
+  const [history, setHistory] = useState([
+    // Pre-seeded history entries as demo
+    {
+      inputText: 'Hola, ¿cómo estás?',
+      inputLanguage: 'es',
+      outputLanguage: 'en',
+      translationResult: 'Hello, how are you?',
+      timestamp: Date.now() - 240000,
+    },
+    {
+      inputText: 'Bonjour!',
+      inputLanguage: 'fr',
+      outputLanguage: 'en',
+      translationResult: 'Hello!',
+      timestamp: Date.now() - 360000,
     }
+  ]);
+
+  // Subcomponent callback stubs
+  const handleInputTextChange = (txt) => setInputText(txt);
+
+  const handleInputVoice = () => {
+    setInputText('Simulated voice text.');
+    setInputMethod('voice');
   };
-  const handleReplay = () => {
-    // Placeholder: in future, invoke TTS
-    alert('Text-to-speech not implemented.');
-  };
+
+  const handleInputLanguageChange = setInputLanguage;
+  const handleOutputLanguageChange = setOutputLanguage;
+
+  const handleCopy = () => window.alert('Copy not implemented');
+  const handleReplay = () => window.alert('Replay not implemented');
   const handleClear = () => {
     setInputText('');
     setTranslationResult('');
   };
-
-  // History logic
-  const handleRestore = (entry) => {
-    setInputText(entry.inputText);
-    setInputLanguage(entry.inputLanguage);
-    setOutputLanguage(entry.outputLanguage);
-    setTranslationResult(entry.translationResult);
+  const handleRestore = (item) => {
+    setInputText(item.inputText);
+    setInputLanguage(item.inputLanguage);
+    setOutputLanguage(item.outputLanguage);
+    setTranslationResult(item.translationResult);
   };
 
-  // Simulated translation request (would be API in real app)
-  // For now, demo: when inputText changes and not in progress, generate dummy translation and update history.
-  React.useEffect(() => {
-    if (inputText && inputText !== '' && !translationInProgress) {
-      setTranslationInProgress(true);
-      setTimeout(() => {
-        // Simulate translation for demo
-        const result = `[${outputLanguage}] ${inputText}`;
-        setTranslationResult(result);
-        setTranslationInProgress(false);
-
-        setHistory(prev =>
-          prev.concat({
-            inputText,
-            inputLanguage,
-            outputLanguage,
-            translationResult: result,
-            timestamp: Date.now(),
-          })
-        );
-      }, 600);
-    } else if (!inputText) {
-      setTranslationResult('');
-    }
-    // eslint-disable-next-line
-  }, [inputText, outputLanguage]);
-
   return (
-    <div className="container" style={{ maxWidth: 700, marginBottom: 48 }}>
+    <div className="container" style={{ maxWidth: 720, marginBottom: 64 }}>
       {/* Language selection (top) */}
       <LanguageSelector
         inputLanguage={inputLanguage}
@@ -305,7 +280,7 @@ function MainContainer() {
         outputLanguage={outputLanguage}
       />
 
-      {/* Translation history */}
+      {/* History panel */}
       <HistoryPanel
         history={history}
         onRestore={handleRestore}
