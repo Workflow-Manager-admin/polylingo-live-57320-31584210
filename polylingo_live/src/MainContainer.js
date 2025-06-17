@@ -18,33 +18,65 @@ import React, { useState } from 'react';
 /* ---------------------------------
  * PUBLIC_INTERFACE
  * LanguageSelector
- * - Selects input and output languages
- * - Props: inputLanguage, outputLanguage, onInputLanguageChange, onOutputLanguageChange
+ * - Selects input and output languages, and allows toggling language auto-detection.
+ * - Props: inputLanguage, outputLanguage, onInputLanguageChange, onOutputLanguageChange, autoDetect, onAutoDetectChange
  */
-function LanguageSelector({ inputLanguage, outputLanguage, onInputLanguageChange, onOutputLanguageChange }) {
+function LanguageSelector({
+  inputLanguage,
+  outputLanguage,
+  onInputLanguageChange,
+  onOutputLanguageChange,
+  autoDetect,
+  onAutoDetectChange
+}) {
+  // Example language options
+  const languages = [
+    { code: 'en', name: 'English' },
+    { code: 'es', name: 'Spanish' },
+    { code: 'fr', name: 'French' },
+    { code: 'de', name: 'German' },
+    { code: 'zh', name: 'Chinese' },
+    // Add more as desired
+  ];
+
   return (
-    <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
+    <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 24 }}>
       <div>
-        <label>
-          Input:&nbsp;
-          <select value={inputLanguage} onChange={e => onInputLanguageChange(e.target.value)}>
-            <option value="auto">Auto-Detect</option>
-            <option value="en">English</option>
-            <option value="es">Spanish</option>
-            {/* Add more languages here */}
-          </select>
+        <label style={{ marginRight: 10 }}>
+          <input
+            type="checkbox"
+            checked={autoDetect}
+            onChange={e => onAutoDetectChange(e.target.checked)}
+            style={{ marginRight: 6 }}
+          />
+          Auto-detect
         </label>
+        <select
+          value={inputLanguage}
+          disabled={autoDetect}
+          onChange={e => onInputLanguageChange(e.target.value)}
+        >
+          {/* When autoDetect: dropdown is disabled and inputLanguage forced to 'auto' */}
+          <option value="auto">-- Select Input --</option>
+          {languages.map(lang => (
+            <option key={lang.code} value={lang.code}>
+              {lang.name}
+            </option>
+          ))}
+        </select>
       </div>
       <div style={{ fontSize: '1.25rem', color: '#bbb' }}>→</div>
       <div>
-        <label>
-          Output:&nbsp;
-          <select value={outputLanguage} onChange={e => onOutputLanguageChange(e.target.value)}>
-            <option value="en">English</option>
-            <option value="es">Spanish</option>
-            {/* Add more languages here */}
-          </select>
-        </label>
+        <select
+          value={outputLanguage}
+          onChange={e => onOutputLanguageChange(e.target.value)}
+        >
+          {languages.map(lang => (
+            <option key={lang.code} value={lang.code}>
+              {lang.name}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );
@@ -197,7 +229,8 @@ function HistoryPanel({ history, onRestore }) {
 function MainContainer() {
   // Demo state only; these would be wired to backend/smart logic in future steps
   const [inputText, setInputText] = useState('');
-  const [inputLanguage, setInputLanguage] = useState('auto');
+  const [autoDetect, setAutoDetect] = useState(true); // new: auto-detect toggle
+  const [inputLanguage, setInputLanguage] = useState('auto'); // will be 'auto' or language code
   const [outputLanguage, setOutputLanguage] = useState('en');
   const [translationResult, setTranslationResult] = useState('');
   const [translationInProgress] = useState(false); // hardcoded false for demo stub
@@ -228,7 +261,16 @@ function MainContainer() {
     setInputMethod('voice');
   };
 
-  const handleInputLanguageChange = setInputLanguage;
+  // If auto-detect is on, always set inputLanguage to 'auto'
+  const handleInputLanguageChange = (lang) => {
+    if (!autoDetect) setInputLanguage(lang);
+  };
+
+  const handleAutoDetectChange = (checked) => {
+    setAutoDetect(checked);
+    if (checked) setInputLanguage('auto');
+  };
+
   const handleOutputLanguageChange = setOutputLanguage;
 
   const handleCopy = () => window.alert('Copy not implemented');
@@ -242,16 +284,19 @@ function MainContainer() {
     setInputLanguage(item.inputLanguage);
     setOutputLanguage(item.outputLanguage);
     setTranslationResult(item.translationResult);
+    setAutoDetect(item.inputLanguage === 'auto');
   };
 
   return (
     <div className="container" style={{ maxWidth: 720, marginBottom: 64 }}>
-      {/* Language selection (top) */}
+      {/* Language selection (top) including auto-detect */}
       <LanguageSelector
         inputLanguage={inputLanguage}
         outputLanguage={outputLanguage}
         onInputLanguageChange={handleInputLanguageChange}
         onOutputLanguageChange={handleOutputLanguageChange}
+        autoDetect={autoDetect}
+        onAutoDetectChange={handleAutoDetectChange}
       />
 
       {/* Input area (text or voice) */}
