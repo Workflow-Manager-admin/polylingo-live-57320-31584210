@@ -50,17 +50,136 @@ function LanguageSelector({ inputLanguage, outputLanguage, onInputLanguageChange
 }
 
 /**
+ * PUBLIC_INTERFACE
+ * InputArea component for text/voice input.
  * Props:
  *  - inputText: Current value from App state
- *  - onInputTextChange: Handler for text input
- *  - onInputVoice: Handler to start voice input (if inputMethod === 'voice')
+ *  - onInputTextChange: Handler for text input (string)
+ *  - onInputVoice: Handler to receive finished voice input (string)
  *  - inputMethod: 'text' or 'voice'
  *  - setInputMethod: Callback to switch input modes
  *  - inputLanguage: For context/display
  */
 function InputArea({ inputText, onInputTextChange, onInputVoice, inputMethod, setInputMethod, inputLanguage }) {
-  // Implementation (textarea, mic button, etc.)
-  return <div>{/* Input area & controls */}</div>;
+  // Recognizer state (for voice input mode)
+  const [recognizing, setRecognizing] = React.useState(false);
+  const [voiceError, setVoiceError] = React.useState('');
+  const recognitionRef = React.useRef(null);
+
+  // PUBLIC_INTERFACE
+  // Start speech recognition using browser API (webkitSpeechRecognition as fallback)
+  const startVoiceRecognition = () => {
+    setVoiceError('');
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      setVoiceError('Speech Recognition not supported in this browser.');
+      return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+
+    // Basic language context (if provided)
+    if (inputLanguage && inputLanguage !== 'auto') {
+      recognition.lang = inputLanguage;
+    }
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setRecognizing(true);
+      setVoiceError('');
+      setInputMethod('voice');
+    };
+    recognition.onresult = (event) => {
+      const result = event.results && event.results[0] && event.results[0][0] && event.results[0][0].transcript;
+      if (result) {
+        onInputVoice(result);
+      }
+      setRecognizing(false);
+      setInputMethod('text');
+    };
+    recognition.onerror = (event) => {
+      setVoiceError(event.error === 'no-speech'
+        ? 'No speech detected. Try again.'
+        : 'Voice input failed. Try again.');
+      setRecognizing(false);
+      setInputMethod('text');
+    };
+    recognition.onend = () => {
+      setRecognizing(false);
+      setInputMethod('text');
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  // Clean-up if component unmounts while recognizing
+  React.useEffect(() => {
+    return () => {
+      if (recognitionRef.current && recognizing) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [recognizing]);
+
+  const handleTextChange = (e) => {
+    onInputTextChange(e.target.value);
+    setInputMethod('text');
+  };
+
+  return (
+    <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+      <textarea
+        style={{
+          width: '100%',
+          minHeight: '2.5em',
+          fontSize: 16,
+          padding: 8,
+          resize: 'vertical',
+          marginBottom: 8,
+          borderRadius: 4,
+          border: '1px solid var(--border-color, #333)',
+        }}
+        value={inputText}
+        placeholder={`Type or speak in ${inputLanguage === 'auto' ? 'any language' : inputLanguage}`}
+        onChange={handleTextChange}
+        disabled={recognizing}
+        aria-label="Enter text"
+      />
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => setInputMethod('text')}
+          disabled={inputMethod === 'text' || recognizing}
+          style={{ marginRight: 12 }}
+          aria-label="Text input mode"
+        >
+          ✍️ Text
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={startVoiceRecognition}
+          disabled={recognizing}
+          style={{
+            marginRight: 12,
+            backgroundColor: recognizing ? '#50E3C2' : undefined,
+          }}
+          aria-label="Voice input mode"
+        >
+          {recognizing ? "🎙️ Listening…" : "🎤 Microphone"}
+        </button>
+        <span style={{ color: '#bbb', fontSize: '1em', marginLeft: 4 }}>
+          Input mode: <b>{recognizing ? 'voice (listening)' : inputMethod}</b>
+        </span>
+      </div>
+      {voiceError && (
+        <div style={{ color: '#E87A41', marginTop: 2, fontSize: 13 }}>{voiceError}</div>
+      )}
+    </div>
+  );
 }
 
 /**
