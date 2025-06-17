@@ -1,18 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { translateText } from './translationService';
 
 /*
   PolyLingo Live - MainContainer Scaffold
 
   This is the main UI container for PolyLingo Live,
-  initially providing only layout and placeholder regions for:
-
-    - LanguageSelector: Selects input/output languages
-    - InputArea: User can type (or in future: speak) content
-    - TranslationDisplay: Displays translation output
-    - OutputControls: "Copy", "Replay", "Clear" actions
-    - HistoryPanel: Shows recent translations
-
-  These are stub, presentational-only components for now.
+  now updated to support real-time translation via the translation service API.
 */
 
 /* ---------------------------------
@@ -234,7 +227,8 @@ function MainContainer() {
   const [inputLanguage, setInputLanguage] = useState('auto');
   const [outputLanguage, setOutputLanguage] = useState('en');
   const [translationResult, setTranslationResult] = useState('');
-  const [translationInProgress] = useState(false); // stub, should eventually be stateful
+  const [translationInProgress, setTranslationInProgress] = useState(false);
+  const [translationError, setTranslationError] = useState('');
   const [inputMethod, setInputMethod] = useState('text');
   const [history, setHistory] = useState([
     {
@@ -252,6 +246,8 @@ function MainContainer() {
       timestamp: Date.now() - 360000,
     }
   ]);
+  // Track last parameters to avoid duplicate API requests
+  const lastTranslationRef = useRef({});
 
   // -- Language Selector Change Handlers --
   // Changes the input language only if autoDetect is off
@@ -279,6 +275,7 @@ function MainContainer() {
   const handleClear = () => {
     setInputText('');
     setTranslationResult('');
+    setTranslationError('');
   };
 
   // -- Restore from history, set language/auto mode as stored in entry --
@@ -288,7 +285,65 @@ function MainContainer() {
     setOutputLanguage(item.outputLanguage);
     setTranslationResult(item.translationResult || '');
     setAutoDetect(item.inputLanguage === 'auto');
+    setTranslationError('');
   };
+
+  // -- Real-time translation logic --
+  useEffect(() => {
+    // Only trigger if inputText is not empty, output language selected, non-trivial case
+    if (!inputText || !outputLanguage) {
+      setTranslationResult('');
+      setTranslationError('');
+      return;
+    }
+
+    // Prevent duplicate/frequent requests (skip if nothing meaningful changed)
+    const key = `${inputText}::${inputLanguage}::${outputLanguage}`;
+    if (lastTranslationRef.current.key === key) {
+      // Did not change
+      return;
+    }
+
+    // Track this request
+    lastTranslationRef.current.key = key;
+
+    let canceled = false;
+    setTranslationInProgress(true);
+    setTranslationError('');
+
+    translateText(
+      inputText,
+      inputLanguage || 'auto',
+      outputLanguage
+    ).then(result => {
+      if (!canceled) {
+        setTranslationResult(result.translatedText);
+        setTranslationError('');
+
+        // Store in history, most recent first
+        setHistory(prev => ([
+          {
+            inputText,
+            inputLanguage,
+            outputLanguage,
+            translationResult: result.translatedText,
+            timestamp: Date.now()
+          },
+          ...prev
+        ].slice(0, 10))); // Max 10 entries
+      }
+    }).catch(err => {
+      if (!canceled) {
+        setTranslationResult('');
+        setTranslationError(err.message || 'Translation failed');
+      }
+    }).finally(() => {
+      if (!canceled) setTranslationInProgress(false);
+    });
+
+    // Cleanup if effect re-runs/cancels, do not update for obsolete requests
+    return () => { canceled = true; };
+  }, [inputText, inputLanguage, outputLanguage]);
 
   return (
     <div className="container" style={{ maxWidth: 720, marginBottom: 64 }}>
@@ -314,7 +369,11 @@ function MainContainer() {
 
       {/* TranslationDisplay stateless; fully controlled output */}
       <TranslationDisplay
-        translationResult={translationResult}
+        translationResult={
+          translationError
+            ? `⚠️ ${translationError}`
+            : translationResult
+        }
         outputLanguage={outputLanguage}
         translationInProgress={translationInProgress}
       />
